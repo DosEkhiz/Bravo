@@ -74,7 +74,6 @@ const CLASSES = [
 
 // Helpers
 const emptyScores = () => Object.fromEntries(CLASSES.map(c => [c, 0]));
-const clamp01 = n => Math.max(0, Math.min(1, n));
 
 /**
  * Axes help generate the "why" text.
@@ -141,32 +140,35 @@ const QUESTIONS = [
       }
     ]
   },
+
+  // ✅ UPDATED Q3: 4-flavor coverage including Divine
   {
     id: "magicVibe",
-    q: "3) If you use magic, what vibe sounds coolest?",
+    q: "3) If you use magic, what feels most like your power source?",
     opts: [
       {
-        t: "A) I studied it. Books, runes, planning, clever spell choices.",
-        add: { Wizard: 4, Artificer: 2, Bard: 1 },
+        t: "A) I studied forbidden tomes, ancient symbols, and arcane theory. Knowledge is power.",
+        add: { Wizard: 4, Artificer: 3, Bard: 1 },
         ax:  { magic: 2, puzzles: 2, complexity: 3, utility: 2 }
       },
       {
-        t: "B) I was born with it. Pure power, dramatic moments, instinct.",
+        t: "B) The power is inside me. It bursts out when I need it — emotional, raw, instinctive.",
         add: { Sorcerer: 4, Warlock: 1, Paladin: 1 },
         ax:  { magic: 2, damage: 2, complexity: 2 }
       },
       {
-        t: "C) I made a deal. A patron, a mystery, “power with a price.”",
-        add: { Warlock: 4, Bard: 1, Rogue: 1 },
-        ax:  { magic: 2, utility: 2, social: 1, complexity: 2 }
+        t: "C) My magic comes from faith, devotion, or a sacred calling greater than myself.",
+        add: { Cleric: 4, Paladin: 3 },
+        ax:  { magic: 2, support: 2, complexity: 2 }
       },
       {
-        t: "D) It comes from nature or spirits. Animals, plants, storms, shapeshifting.",
-        add: { Druid: 4, Ranger: 2, Cleric: 1 },
+        t: "D) My power flows from nature, spirits, and the living world.",
+        add: { Druid: 4, Ranger: 3, Barbarian: 1 },
         ax:  { magic: 2, explore: 2, utility: 2, complexity: 2, companion: 1 }
       }
     ]
   },
+
   {
     id: "combatRole",
     q: "4) In a fight, what role sounds fun?",
@@ -198,8 +200,9 @@ const QUESTIONS = [
     q: "5) Outside combat, what sounds most fun?",
     opts: [
       {
+        // ✅ UPDATED: Paladin +2 → +3 (from our earlier agreed adjustment)
         t: "A) Talking to NPCs, persuasion, drama, being “the face.”",
-        add: { Bard: 4, Warlock: 2, Paladin: 2, Sorcerer: 1 },
+        add: { Bard: 4, Warlock: 2, Paladin: 3, Sorcerer: 1 },
         ax:  { social: 4, utility: 1, complexity: 1 }
       },
       {
@@ -250,7 +253,8 @@ const QUESTIONS = [
     q: "7) How do you like helping the team?",
     opts: [
       {
-        t: "A) I protect people. I like being a shield.",
+        // ✅ UPDATED wording: protector/defender without “shield”
+        t: "A) I step between danger and my allies. Protecting others feels right.",
         add: { Paladin: 4, Fighter: 3, Cleric: 2, Barbarian: 1 },
         ax:  { support: 2, combat: 2, complexity: 1 }
       },
@@ -333,11 +337,9 @@ let state = {
 };
 
 function applyChoice(choice) {
-  // Add class scores
   for (const [cls, val] of Object.entries(choice.add || {})) {
     if (state.scores[cls] !== undefined) state.scores[cls] += val;
   }
-  // Add axes
   for (const [k, v] of Object.entries(choice.ax || {})) {
     if (state.ax[k] !== undefined) state.ax[k] += v;
   }
@@ -379,7 +381,6 @@ function renderQuestion() {
       const idx = Number(btn.dataset.idx);
       state.answers[state.i] = idx;
       recomputeFromScratch();
-      // Move forward automatically (fast UX)
       if (state.i < QUESTIONS.length - 1) {
         state.i++;
         updateNav();
@@ -400,7 +401,6 @@ function updateNav() {
 }
 
 function describeWhy(cls) {
-  // Lightweight “why” based on axes + class identity.
   const a = state.ax;
   const magic = a.magic;
   const martial = a.martial;
@@ -435,12 +435,12 @@ function describeWhy(cls) {
     Rogue: "skillful trickster with stealth and clutch turns",
     Ranger: "explorer with tracking, ranged options, and nature flavor",
     Monk: "mobile martial artist with stylish movement",
-    Paladin: "holy warrior with tanky presence and support magic",
+    Paladin: "holy warrior with frontline presence and support magic",
     Wizard: "the toolbox mage with tons of spell options",
     Sorcerer: "innate magic with big, flashy moments",
     Warlock: "pact-powered caster with a strong story hook",
     Cleric: "divine support with strong survivability",
-    Druid: "nature caster with utility and wild transformations",
+    Druid: "nature caster with utility and transformations",
     Bard: "social powerhouse with buffs and flexible magic",
     Artificer: "tinker-mage with gadgets and clever solutions"
   }[cls] || "solid fit";
@@ -449,7 +449,6 @@ function describeWhy(cls) {
   if (roleBits.length) why += ` You also leaned toward ${roleBits.slice(0,2).join(" and ")}.`;
   why += ` This points to a ${classTag}.`;
 
-  // Add simplicity hint
   if (simple && ["Wizard","Druid"].includes(cls)) {
     why += ` (If you want an easier start, consider Fighter/Paladin-style picks.)`;
   }
@@ -465,7 +464,6 @@ function renderResults() {
   quiz.style.display = "none";
   results.style.display = "block";
 
-  // Rank classes
   const ranked = Object.entries(state.scores)
     .sort((a,b) => b[1] - a[1]);
 
