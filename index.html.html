@@ -1,0 +1,514 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>D&D Class Quiz (Beginner-Friendly)</title>
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; line-height: 1.35; }
+    body { margin: 0; padding: 24px; background: #0b0d12; color: #e9eefc; }
+    .wrap { max-width: 860px; margin: 0 auto; }
+    h1 { margin: 0 0 8px; font-size: 28px; }
+    p { margin: 0 0 16px; color: #b9c3e6; }
+    .card { background: #121827; border: 1px solid #25304a; border-radius: 16px; padding: 18px; margin: 14px 0; }
+    .q { font-size: 18px; margin: 0 0 12px; }
+    .opts { display: grid; gap: 10px; }
+    button.opt {
+      text-align: left;
+      padding: 12px 12px;
+      border-radius: 12px;
+      border: 1px solid #2a395a;
+      background: #0f1523;
+      color: #e9eefc;
+      cursor: pointer;
+      transition: transform .02s ease, background .12s ease, border-color .12s ease;
+    }
+    button.opt:hover { background: #141d30; border-color: #3b5aa2; }
+    button.opt:active { transform: translateY(1px); }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .pill { border: 1px solid #2a395a; background: #0f1523; padding: 6px 10px; border-radius: 999px; color: #b9c3e6; font-size: 13px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .btn {
+      padding: 10px 12px; border-radius: 12px; border: 1px solid #2a395a;
+      background: #0f1523; color: #e9eefc; cursor: pointer;
+    }
+    .btn.primary { background: #1a2a4d; border-color: #3b5aa2; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .result h2 { margin: 0 0 8px; }
+    .result .top { display: grid; gap: 12px; }
+    .classBox { border: 1px solid #2a395a; background: #0f1523; border-radius: 14px; padding: 12px; }
+    .classBox .name { font-size: 18px; font-weight: 700; }
+    .classBox .why { margin-top: 6px; color: #b9c3e6; }
+    .small { font-size: 13px; color: #b9c3e6; }
+    .progress { margin-top: 8px; color: #b9c3e6; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>D&D Class Quiz (for N00BS)</h1>
+  <p>Answer 9 quick questions. You’ll get your <b>Top 3 classes</b> with a short explanation and a “simpler vs deeper” suggestion.</p>
+
+  <div id="quiz" class="card"></div>
+
+  <div class="actions">
+    <button id="backBtn" class="btn" disabled>Back</button>
+    <button id="restartBtn" class="btn">Restart</button>
+  </div>
+
+  <div id="results" class="card result" style="display:none;"></div>
+
+  <p class="small">
+    Note: This is a “what sounds fun” quiz. Any class can work for any player — the goal is to help you pick a great starting vibe.
+  </p>
+</div>
+
+<script>
+/**
+ * Beginner-first class list (PHB-ish core).
+ * You can add Artificer later if you want (I included it lightly in the scoring hooks).
+ */
+const CLASSES = [
+  "Barbarian","Fighter","Rogue","Ranger","Monk","Paladin",
+  "Wizard","Sorcerer","Warlock","Cleric","Druid","Bard","Artificer"
+];
+
+// Helpers
+const emptyScores = () => Object.fromEntries(CLASSES.map(c => [c, 0]));
+
+/**
+ * Axes help generate the "why" text.
+ * 0..10-ish ranges via simple increments.
+ */
+const axes = () => ({
+  martial: 0, magic: 0,
+  combat: 0, social: 0, explore: 0, puzzles: 0,
+  support: 0, damage: 0, utility: 0,
+  complexity: 0,
+  companion: 0
+});
+
+const QUESTIONS = [
+  {
+    id: "combatFocus",
+    q: "1) How much do you want combat to be your “main thing”?",
+    opts: [
+      {
+        t: "A) Mostly combat — I want to hit stuff and feel strong.",
+        add: { Barbarian: 3, Fighter: 3, Paladin: 2, Ranger: 1 },
+        ax:  { combat: 3, martial: 3, damage: 2, complexity: 0 }
+      },
+      {
+        t: "B) Some combat — I want a mix of fighting and story.",
+        add: { Fighter: 2, Paladin: 2, Ranger: 2, Rogue: 2, Bard: 1, Cleric: 1 },
+        ax:  { combat: 2, martial: 2, social: 1, explore: 1, complexity: 1 }
+      },
+      {
+        t: "C) Combat is fine, but I’m here for cool abilities and choices.",
+        add: { Wizard: 2, Warlock: 2, Sorcerer: 2, Bard: 2, Druid: 2, Cleric: 1 },
+        ax:  { combat: 1, magic: 2, utility: 2, complexity: 2 }
+      },
+      {
+        t: "D) Minimal combat — I mostly want roleplay, puzzles, and clever solutions.",
+        add: { Bard: 3, Rogue: 3, Wizard: 2, Druid: 2, Cleric: 1 },
+        ax:  { combat: 0, social: 3, puzzles: 2, utility: 2, complexity: 2 }
+      }
+    ]
+  },
+  {
+    id: "magicAmount",
+    q: "2) How much magic do you want overall?",
+    opts: [
+      {
+        t: "A) None. I want to be a purely non-magic hero.",
+        add: { Fighter: 3, Barbarian: 3, Rogue: 2, Monk: 2 },
+        ax:  { martial: 3, magic: 0, complexity: 0 }
+      },
+      {
+        t: "B) A little magic — like a special trick, not a whole spellbook.",
+        add: { Paladin: 3, Ranger: 3, Warlock: 2, Bard: 1 },
+        ax:  { martial: 2, magic: 2, utility: 1, complexity: 1 }
+      },
+      {
+        t: "C) A solid amount — I want magic often, but also other stuff.",
+        add: { Bard: 3, Cleric: 3, Druid: 3, Warlock: 2 },
+        ax:  { magic: 3, support: 2, utility: 2, complexity: 2 }
+      },
+      {
+        t: "D) LOTS of magic — give me the big spells and weird powers.",
+        add: { Wizard: 4, Sorcerer: 4, Druid: 3, Cleric: 2, Warlock: 2 },
+        ax:  { magic: 4, utility: 2, damage: 2, complexity: 3 }
+      }
+    ]
+  },
+
+  // ✅ UPDATED Q3: 4-flavor coverage including Divine
+  {
+    id: "magicVibe",
+    q: "3) If you use magic, what feels most like your power source?",
+    opts: [
+      {
+        t: "A) I studied forbidden tomes, ancient symbols, and arcane theory. Knowledge is power.",
+        add: { Wizard: 4, Artificer: 3, Bard: 1 },
+        ax:  { magic: 2, puzzles: 2, complexity: 3, utility: 2 }
+      },
+      {
+        t: "B) The power is inside me. It bursts out when I need it — emotional, raw, instinctive.",
+        add: { Sorcerer: 4, Warlock: 1, Paladin: 1 },
+        ax:  { magic: 2, damage: 2, complexity: 2 }
+      },
+      {
+        t: "C) My magic comes from faith, devotion, or a sacred calling greater than myself.",
+        add: { Cleric: 4, Paladin: 3 },
+        ax:  { magic: 2, support: 2, complexity: 2 }
+      },
+      {
+        t: "D) My power flows from nature, spirits, and the living world.",
+        add: { Druid: 4, Ranger: 3, Barbarian: 1 },
+        ax:  { magic: 2, explore: 2, utility: 2, complexity: 2, companion: 1 }
+      }
+    ]
+  },
+
+  {
+    id: "combatRole",
+    q: "4) In a fight, what role sounds fun?",
+    opts: [
+      {
+        t: "A) Frontline tank — I protect allies and don’t go down.",
+        add: { Fighter: 3, Paladin: 3, Barbarian: 2, Cleric: 1 },
+        ax:  { combat: 2, martial: 2, support: 1, complexity: 1 }
+      },
+      {
+        t: "B) Big damage — I want to delete threats fast.",
+        add: { Barbarian: 3, Rogue: 3, Sorcerer: 2, Wizard: 2, Ranger: 1 },
+        ax:  { combat: 2, damage: 3, complexity: 1 }
+      },
+      {
+        t: "C) Control/support — I buff allies, debuff enemies, and set up wins.",
+        add: { Bard: 3, Cleric: 3, Wizard: 2, Druid: 2 },
+        ax:  { combat: 2, support: 3, utility: 2, complexity: 2 }
+      },
+      {
+        t: "D) Sneaky/skirmisher — I move, trick, and strike at the right moment.",
+        add: { Rogue: 4, Ranger: 2, Monk: 2, Warlock: 1 },
+        ax:  { combat: 2, utility: 2, puzzles: 1, complexity: 2 }
+      }
+    ]
+  },
+  {
+    id: "outOfCombat",
+    q: "5) Outside combat, what sounds most fun?",
+    opts: [
+      {
+        // ✅ UPDATED: Paladin +2 → +3 (from our earlier agreed adjustment)
+        t: "A) Talking to NPCs, persuasion, drama, being “the face.”",
+        add: { Bard: 4, Warlock: 2, Paladin: 3, Sorcerer: 1 },
+        ax:  { social: 4, utility: 1, complexity: 1 }
+      },
+      {
+        t: "B) Sneaking, stealing, scouting, setting traps, clever plans.",
+        add: { Rogue: 4, Ranger: 2, Wizard: 1, Artificer: 1 },
+        ax:  { puzzles: 2, explore: 2, utility: 2, complexity: 2 }
+      },
+      {
+        t: "C) Mysteries & puzzles — I like thinking and problem-solving.",
+        add: { Wizard: 3, Bard: 2, Cleric: 2, Artificer: 2 },
+        ax:  { puzzles: 4, utility: 2, complexity: 3 }
+      },
+      {
+        t: "D) Exploration & survival — wilderness, tracking, travel problems.",
+        add: { Ranger: 4, Druid: 3, Barbarian: 1, Monk: 1 },
+        ax:  { explore: 4, utility: 2, companion: 1, complexity: 1 }
+      }
+    ]
+  },
+  {
+    id: "complexity",
+    q: "6) How “rules crunchy” do you want your character to be?",
+    opts: [
+      {
+        t: "A) Very simple. I want to learn the game first.",
+        add: { Fighter: 3, Barbarian: 3, Rogue: 2, Paladin: 1 },
+        ax:  { complexity: 0 }
+      },
+      {
+        t: "B) Medium. A few special abilities is perfect.",
+        add: { Paladin: 3, Ranger: 3, Bard: 2, Warlock: 2, Monk: 2 },
+        ax:  { complexity: 2, magic: 1 }
+      },
+      {
+        t: "C) High. I enjoy lots of options and planning.",
+        add: { Wizard: 4, Druid: 3, Cleric: 3, Bard: 2, Artificer: 2 },
+        ax:  { complexity: 4, magic: 2, utility: 2 }
+      },
+      {
+        t: "D) Chaos is fun. I want big moments and weird choices.",
+        add: { Sorcerer: 3, Warlock: 3, Bard: 2, Druid: 2 },
+        ax:  { complexity: 3, magic: 2, utility: 1 }
+      }
+    ]
+  },
+  {
+    id: "teamStyle",
+    q: "7) How do you like helping the team?",
+    opts: [
+      {
+        // ✅ UPDATED wording: protector/defender without “shield”
+        t: "A) I step between danger and my allies. Protecting others feels right.",
+        add: { Paladin: 4, Fighter: 3, Cleric: 2, Barbarian: 1 },
+        ax:  { support: 2, combat: 2, complexity: 1 }
+      },
+      {
+        t: "B) I boost the team. Buffs, healing, inspiration, strategy.",
+        add: { Bard: 4, Cleric: 4, Druid: 2, Paladin: 2 },
+        ax:  { support: 4, social: 1, complexity: 2 }
+      },
+      {
+        t: "C) I create openings. Control, debuffs, battlefield tricks.",
+        add: { Wizard: 4, Druid: 3, Warlock: 2, Bard: 2 },
+        ax:  { utility: 3, combat: 2, complexity: 3 }
+      },
+      {
+        t: "D) I do clutch plays. High impact at the right moment.",
+        add: { Rogue: 4, Sorcerer: 3, Ranger: 2, Monk: 2 },
+        ax:  { damage: 2, utility: 2, combat: 2, complexity: 2 }
+      }
+    ]
+  },
+  {
+    id: "aesthetic",
+    q: "8) Pick your fantasy aesthetic:",
+    opts: [
+      {
+        t: "A) Holy champion / oath-bound hero with a code.",
+        add: { Paladin: 5, Cleric: 2 },
+        ax:  { social: 1, support: 1, magic: 1 }
+      },
+      {
+        t: "B) Wild guardian / spirit friend / nature’s wrath.",
+        add: { Druid: 5, Ranger: 2, Barbarian: 1 },
+        ax:  { explore: 2, magic: 1, companion: 1 }
+      },
+      {
+        t: "C) Street-smart survivor / outlaw / shadowy expert.",
+        add: { Rogue: 5, Ranger: 2, Bard: 1 },
+        ax:  { puzzles: 2, social: 1, utility: 1 }
+      },
+      {
+        t: "D) Arcane weirdo / scholar / power-hungry mage.",
+        add: { Wizard: 4, Warlock: 3, Sorcerer: 2, Artificer: 2 },
+        ax:  { magic: 2, utility: 1, complexity: 2 }
+      }
+    ]
+  },
+  {
+    id: "companion",
+    q: "9) Do you want a companion (pet/spirits/created helper)?",
+    opts: [
+      {
+        t: "A) Yes. I want a buddy to adventure with.",
+        add: { Ranger: 4, Druid: 3, Artificer: 2 },
+        ax:  { companion: 3, explore: 1, utility: 1 }
+      },
+      {
+        t: "B) Maybe. Not required, but it sounds cool.",
+        add: { Ranger: 2, Druid: 2, Artificer: 1, Wizard: 1 },
+        ax:  { companion: 1, utility: 1 }
+      },
+      {
+        t: "C) No. I want to focus on my character.",
+        add: { Fighter: 2, Barbarian: 2, Rogue: 2, Paladin: 2, Warlock: 1 },
+        ax:  { companion: 0 }
+      },
+      {
+        t: "D) I want “summons” and weird magical helpers sometimes.",
+        add: { Wizard: 2, Druid: 2, Warlock: 2, Cleric: 1 },
+        ax:  { companion: 2, magic: 1, utility: 2, complexity: 2 }
+      }
+    ]
+  }
+];
+
+let state = {
+  i: 0,
+  answers: Array(QUESTIONS.length).fill(null),
+  scores: emptyScores(),
+  ax: axes()
+};
+
+function applyChoice(choice) {
+  for (const [cls, val] of Object.entries(choice.add || {})) {
+    if (state.scores[cls] !== undefined) state.scores[cls] += val;
+  }
+  for (const [k, v] of Object.entries(choice.ax || {})) {
+    if (state.ax[k] !== undefined) state.ax[k] += v;
+  }
+}
+
+function recomputeFromScratch() {
+  state.scores = emptyScores();
+  state.ax = axes();
+  state.answers.forEach((optIndex, qi) => {
+    if (optIndex == null) return;
+    applyChoice(QUESTIONS[qi].opts[optIndex]);
+  });
+}
+
+function renderQuestion() {
+  const quiz = document.getElementById("quiz");
+  const results = document.getElementById("results");
+  results.style.display = "none";
+  quiz.style.display = "block";
+
+  const q = QUESTIONS[state.i];
+  const picked = state.answers[state.i];
+
+  quiz.innerHTML = `
+    <div class="q">${q.q}</div>
+    <div class="opts">
+      ${q.opts.map((o, idx) => `
+        <button class="opt" data-idx="${idx}">
+          ${o.t}
+          ${picked === idx ? `<div class="row"><span class="pill">Selected</span></div>` : ``}
+        </button>
+      `).join("")}
+    </div>
+    <div class="progress">Question ${state.i + 1} / ${QUESTIONS.length}</div>
+  `;
+
+  quiz.querySelectorAll("button.opt").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = Number(btn.dataset.idx);
+      state.answers[state.i] = idx;
+      recomputeFromScratch();
+      if (state.i < QUESTIONS.length - 1) {
+        state.i++;
+        updateNav();
+        renderQuestion();
+      } else {
+        updateNav();
+        renderResults();
+      }
+    });
+  });
+
+  updateNav();
+}
+
+function updateNav() {
+  const backBtn = document.getElementById("backBtn");
+  backBtn.disabled = (state.i === 0);
+}
+
+function describeWhy(cls) {
+  const a = state.ax;
+  const magic = a.magic;
+  const martial = a.martial;
+  const social = a.social;
+  const explore = a.explore;
+  const puzzles = a.puzzles;
+  const support = a.support;
+  const damage = a.damage;
+  const complexity = a.complexity;
+
+  const vibes = [];
+  if (magic >= 6) vibes.push("you wanted lots of magic");
+  else if (magic >= 3) vibes.push("you wanted some magic");
+  else vibes.push("you leaned more non-magic");
+
+  if (martial >= 6) vibes.push("you like direct fighting");
+  if (social >= 5) vibes.push("you enjoy talking/roleplay");
+  if (puzzles >= 5) vibes.push("you enjoy puzzles & clever solutions");
+  if (explore >= 5) vibes.push("you enjoy exploration/travel");
+
+  const roleBits = [];
+  if (support >= 6) roleBits.push("supporting allies");
+  if (damage >= 6) roleBits.push("big damage moments");
+  if (state.ax.utility >= 6) roleBits.push("creative utility");
+
+  const simple = complexity <= 2;
+  const complex = complexity >= 7;
+
+  const classTag = {
+    Barbarian: "simple, durable frontline bruiser",
+    Fighter: "straightforward combat expert (very beginner-friendly)",
+    Rogue: "skillful trickster with stealth and clutch turns",
+    Ranger: "explorer with tracking, ranged options, and nature flavor",
+    Monk: "mobile martial artist with stylish movement",
+    Paladin: "holy warrior with frontline presence and support magic",
+    Wizard: "the toolbox mage with tons of spell options",
+    Sorcerer: "innate magic with big, flashy moments",
+    Warlock: "pact-powered caster with a strong story hook",
+    Cleric: "divine support with strong survivability",
+    Druid: "nature caster with utility and transformations",
+    Bard: "social powerhouse with buffs and flexible magic",
+    Artificer: "tinker-mage with gadgets and clever solutions"
+  }[cls] || "solid fit";
+
+  let why = `Because ${vibes.slice(0,2).join(" and ")}.`;
+  if (roleBits.length) why += ` You also leaned toward ${roleBits.slice(0,2).join(" and ")}.`;
+  why += ` This points to a ${classTag}.`;
+
+  if (simple && ["Wizard","Druid"].includes(cls)) {
+    why += ` (If you want an easier start, consider Fighter/Paladin-style picks.)`;
+  }
+  if (complex && ["Fighter","Barbarian"].includes(cls)) {
+    why += ` (If you want more complexity, consider Wizard/Bard.)`;
+  }
+  return why;
+}
+
+function renderResults() {
+  const quiz = document.getElementById("quiz");
+  const results = document.getElementById("results");
+  quiz.style.display = "none";
+  results.style.display = "block";
+
+  const ranked = Object.entries(state.scores)
+    .sort((a,b) => b[1] - a[1]);
+
+  const top3 = ranked.slice(0,3);
+
+  const suggestions = {
+    simpler: ranked.find(([c]) => ["Fighter","Barbarian","Rogue"].includes(c))?.[0] || "Fighter",
+    deeper: ranked.find(([c]) => ["Wizard","Bard","Druid","Cleric"].includes(c))?.[0] || "Wizard"
+  };
+
+  results.innerHTML = `
+    <h2>Your Top 3 Classes</h2>
+    <div class="top">
+      ${top3.map(([cls, score], idx) => `
+        <div class="classBox">
+          <div class="name">#${idx+1}: ${cls} <span class="pill">score ${score}</span></div>
+          <div class="why">${describeWhy(cls)}</div>
+        </div>
+      `).join("")}
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <div class="q">Quick guide</div>
+      <div class="small">
+        Want the easiest start? Try <b>${suggestions.simpler}</b>.<br/>
+        Want lots of options and “game mastery”? Try <b>${suggestions.deeper}</b>.<br/>
+        If your DM is doing a story-heavy campaign, <b>Bard / Paladin / Warlock</b> tend to shine in roleplay.
+      </div>
+    </div>
+  `;
+}
+
+// Nav buttons
+document.getElementById("backBtn").addEventListener("click", () => {
+  if (state.i > 0) state.i--;
+  renderQuestion();
+});
+
+document.getElementById("restartBtn").addEventListener("click", () => {
+  state = { i: 0, answers: Array(QUESTIONS.length).fill(null), scores: emptyScores(), ax: axes() };
+  renderQuestion();
+});
+
+// Start
+renderQuestion();
+</script>
+</body>
+</html>
